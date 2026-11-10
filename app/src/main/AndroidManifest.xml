@@ -34,6 +34,9 @@
         android:theme="@style/Theme.LocalDream"
         tools:targetApi="33">
 
+        <!-- OpenCL is optional; devices without its vendor driver still use Vulkan or CPU. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|uiMode"
