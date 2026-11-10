@@ -79,6 +79,10 @@ set(MNN_BUILD_FOR_ANDROID ON CACHE BOOL "" FORCE)
 set(MNN_BUILD_FOR_ANDROID_COMMAND ON CACHE BOOL "" FORCE)
 set(MNN_USE_LOGCAT OFF CACHE BOOL "" FORCE)
 set(MNN_OPENCL ON CACHE BOOL "" FORCE)
+# Build both Android GPU backends. Runtime prefers Vulkan, then OpenCL.
+set(MNN_VULKAN ON CACHE BOOL "" FORCE)
+# MNN dynamically loads the device Vulkan/OpenCL drivers at runtime.
+set(MNN_USE_SYSTEM_LIB OFF CACHE BOOL "" FORCE)
 set(MNN_SUPPORT_TRANSFORMER_FUSE ON CACHE BOOL "" FORCE)
 add_subdirectory(3rdparty/MNN)
 
