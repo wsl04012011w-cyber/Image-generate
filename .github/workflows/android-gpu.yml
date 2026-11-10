@@ -97,7 +97,7 @@ jobs:
 
       - name: Report Android dependency versions
         run: |
-          echo "compileSdk is pinned to 36; Compose Material3 uses the stable 1.4.0 line."
+          echo "compileSdk 36; Material3 Expressive alpha17 aligned with Compose BOM 2026.04.01 (Compose 1.11).";
           grep -E 'compileSdk|material3 =' app/build.gradle.kts gradle/libs.versions.toml
 
       - name: Run Android unit tests and assemble APKs
