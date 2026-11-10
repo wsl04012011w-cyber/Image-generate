@@ -83,6 +83,8 @@ set(MNN_OPENCL ON CACHE BOOL "" FORCE)
 set(MNN_VULKAN ON CACHE BOOL "" FORCE)
 # MNN dynamically loads the device Vulkan/OpenCL drivers at runtime.
 set(MNN_USE_SYSTEM_LIB OFF CACHE BOOL "" FORCE)
+# Link backend objects into the static MNN library so runtime registration works.
+set(MNN_SEP_BUILD OFF CACHE BOOL "" FORCE)
 set(MNN_SUPPORT_TRANSFORMER_FUSE ON CACHE BOOL "" FORCE)
 add_subdirectory(3rdparty/MNN)
 
