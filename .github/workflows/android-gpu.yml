@@ -79,7 +79,7 @@ jobs:
       - name: Install Android SDK, NDK and CMake
         shell: bash
         run: |
-          sdkmanager             "platforms;android-36"             "build-tools;36.0.0"             "ndk;29.0.14206865"             "cmake;3.31.6"
+          sdkmanager             "platforms;android-37"             "build-tools;36.0.0"             "ndk;29.0.14206865"             "cmake;3.31.6"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
           echo "$ANDROID_HOME/cmake/3.31.6/bin" >> "$GITHUB_PATH"
 
@@ -97,7 +97,7 @@ jobs:
 
       - name: Report Android dependency versions
         run: |
-          echo "compileSdk 36; using upstream Material3 1.5.0-alpha20 and Compose BOM 2025.10.01.";
+          echo "compileSdk 37; using upstream Material3 1.5.0-alpha20 and Compose BOM 2025.10.01.";
           grep -E 'compileSdk|material3 =' app/build.gradle.kts gradle/libs.versions.toml
 
       - name: Run Android unit tests and assemble APKs
