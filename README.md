@@ -28,6 +28,36 @@ If you like it, please consider [sponsor](#-support-this-project) this project.
 >
 > You can join our [telegram group](https://t.me/local_dream) for discussion or help with testing.
 
+
+## GPU backend behavior
+
+For MNN-backed CPU models, the GPU option now selects the best available mobile GPU
+backend in this order:
+
+1. **Vulkan** — preferred when the Android device exposes a working Vulkan driver.
+2. **OpenCL** — compatibility fallback for devices whose Vulkan session cannot be created.
+3. **CPU** — final fallback, so GPU selection does not make unsupported devices unusable.
+
+The MNN Android build enables both `MNN_VULKAN` and `MNN_OPENCL`. MNN loads the
+device graphics drivers at runtime; the app does not bundle a generic Vulkan driver.
+The existing GPU toggle and saved `use_opencl` request field remain compatible.
+
+This path accelerates the MNN-backed SD1.5 CPU pipeline and imported SDXL MNN
+packages. Snapdragon QNN/NPU models and the separate DiT engine keep their own
+runtimes; selecting this GPU option does not redirect those engines.
+
+## Upstream provenance and license
+
+This repository is a modified derivative of
+[Local Dream](https://github.com/xororz/local-dream) by xororz. The upstream
+license and copyright notices are retained in [LICENSE](./LICENSE). Changes in
+this fork include Vulkan-first MNN GPU selection with OpenCL/CPU fallback and
+an Android build workflow.
+
+The upstream project is licensed under **CC BY-NC 4.0**. Attribution is required
+and the license permits use and distribution only for non-commercial purposes;
+commercial use requires separate permission from the relevant rights holders.
+
 ## User Guide
 
 For certain reasons, all guides and documentation have been moved to [Guide Site](https://ld-guide.chino.icu).
