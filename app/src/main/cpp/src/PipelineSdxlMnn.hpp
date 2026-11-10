@@ -131,20 +131,16 @@ class PipelineSdxlMnn : public PipelineSdxl {
     nets_[stage].reset(createMnnInterpreterMmap(path.c_str()));
     if (!nets_[stage]) throw std::runtime_error(path);
     auto &net = *nets_[stage];
-    MNN::ScheduleConfig config;
-    MNN::BackendConfig backend;
-    backend.memory = MNN::BackendConfig::Memory_Low;
-    backend.precision = MNN::BackendConfig::Precision_Low;
-    backend.power = MNN::BackendConfig::Power_High;
-    config.backendConfig = &backend;
-    config.type = stage == 0 && req.use_opencl ? MNN_FORWARD_OPENCL : MNN_FORWARD_CPU;
-    config.numThread = 4;
-    if (config.type == MNN_FORWARD_OPENCL) {
-      config.mode = MNN_GPU_MEMORY_BUFFER | MNN_GPU_TUNING_FAST;
-      net.setCacheFile((model_dir_ + "/unet.mnnc").c_str());
+    MnnSessionOptions options;
+    options.use_opencl = stage == 0 && req.use_opencl;
+    options.num_threads = 4;
+    if (options.use_opencl) {
+      options.cache_file = model_dir_ + "/unet.mnnc";
     }
     if (stage == 0) net.setSessionMode(MNN::Interpreter::Session_Resize_Defer);
-    sessions_[stage] = net.createSession(config);
+    // Share Vulkan -> OpenCL -> CPU selection with the SD1.5 MNN pipeline.
+    // The SDXL VAEs remain CPU-backed, matching the previous runtime behavior.
+    sessions_[stage] = createMnnSession(&net, options);
     if (!sessions_[stage]) throw std::runtime_error(path);
     if (stage != 0) net.releaseModel();
     return net;
