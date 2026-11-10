@@ -64,35 +64,63 @@ inline MNN::Interpreter *createMnnInterpreterMmap(const char *path) {
   return interpreter;
 }
 
-// Session creation options shared by every MNN model in the pipeline.
-// CPU: 4 threads, low-memory, high-power. OpenCL: fast tuning + buffer mode
-// with low precision, plus an on-disk tuning cache when cache_file is set.
+// use_opencl is retained as the request-field name for saved preferences and
+// older clients. It now means "GPU requested": prefer Vulkan, fall back to
+// OpenCL, and finally let the caller use CPU if no GPU session can be created.
 struct MnnSessionOptions {
   bool use_opencl = false;
-  std::string cache_file;  // OpenCL tuning cache path ("" = no cache file)
+  std::string cache_file;  // Base path; backend-specific suffixes avoid cache collisions.
   int num_threads = 4;
 };
 
 // Creates a session with the standard pipeline configuration. The interpreter
 // keeps no reference to the local configs after createSession returns.
+// Vulkan and OpenCL are runtime-loaded by MNN, so no bundled Vulkan SDK or
+// vendor-specific .so is needed in the APK. Devices without a usable driver
+// continue through OpenCL and CPU.
 inline MNN::Session *createMnnSession(MNN::Interpreter *interpreter,
                                       const MnnSessionOptions &opts) {
   MNN::ScheduleConfig config;
   MNN::BackendConfig backendConfig;
-  if (opts.use_opencl) {
-    if (!opts.cache_file.empty()) {
-      interpreter->setCacheFile(opts.cache_file.c_str());
-    }
-    config.type = MNN_FORWARD_OPENCL;
-    config.mode = MNN_GPU_MEMORY_BUFFER | MNN_GPU_TUNING_FAST;
-    backendConfig.precision = MNN::BackendConfig::Precision_Low;
-  } else {
-    config.type = MNN_FORWARD_CPU;
-    config.numThread = opts.num_threads;
-    backendConfig.memory = MNN::BackendConfig::Memory_Low;
-  }
   backendConfig.power = MNN::BackendConfig::Power_High;
   config.backendConfig = &backendConfig;
+  config.numThread = opts.num_threads;
+
+  if (opts.use_opencl) {
+    backendConfig.precision = MNN::BackendConfig::Precision_Low;
+
+    // Vulkan has its own tuning modes; OpenCL-only memory flags must not be
+    // passed to this backend.
+    config.type = MNN_FORWARD_VULKAN;
+    config.mode = MNN_GPU_TUNING_WIDE;
+    if (!opts.cache_file.empty()) {
+      const std::string cache_path = opts.cache_file + ".vulkan";
+      interpreter->setCacheFile(cache_path.c_str());
+    }
+    if (MNN::Session *session = interpreter->createSession(config)) {
+      return session;
+    }
+
+    // OpenCL remains the compatibility fallback for older/quirky Android GPU
+    // drivers and devices that expose OpenCL but not a working Vulkan runtime.
+    config.type = MNN_FORWARD_OPENCL;
+    config.mode = MNN_GPU_MEMORY_BUFFER | MNN_GPU_TUNING_FAST;
+    if (!opts.cache_file.empty()) {
+      const std::string cache_path = opts.cache_file + ".opencl";
+      interpreter->setCacheFile(cache_path.c_str());
+    }
+    if (MNN::Session *session = interpreter->createSession(config)) {
+      return session;
+    }
+  }
+
+  // CPU is always the final fallback and keeps the low-memory configuration
+  // previously used by this app.
+  config.type = MNN_FORWARD_CPU;
+  config.mode = 0;
+  config.numThread = opts.num_threads;
+  backendConfig.memory = MNN::BackendConfig::Memory_Low;
+  backendConfig.precision = MNN::BackendConfig::Precision_Normal;
   return interpreter->createSession(config);
 }
 
