@@ -47,6 +47,8 @@ private fun ImageGeneratorScreen(filesDir: File) {
     val scope = rememberCoroutineScope()
     val downloader = remember { ModelDownloader() }
     val engine = remember { DiffusionEngine() }
+    val modelFile = remember { File(File(filesDir, "models"), "model.safetensors") }
+    var hasModel by remember { mutableStateOf(modelFile.exists() && modelFile.length() > 0L) }
     var prompt by remember { mutableStateOf("") }
     var modelUrl by remember { mutableStateOf(DEFAULT_MODEL_URL) }
     var steps by remember { mutableFloatStateOf(8f) }
@@ -55,8 +57,6 @@ private fun ImageGeneratorScreen(filesDir: File) {
     var progress by remember { mutableFloatStateOf(0f) }
     var busy by remember { mutableStateOf(false) }
     var image by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    val modelFile = remember { File(File(filesDir, "models"), "model.safetensors") }
-    val hasModel = remember { derivedStateOf { modelFile.exists() && modelFile.length() > 0 } }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -75,7 +75,7 @@ private fun ImageGeneratorScreen(filesDir: File) {
                     label = { Text("URL HTTPS do modelo") },
                     singleLine = false
                 )
-                Text(if (hasModel.value) "Modelo baixado: ${modelFile.name} (${modelFile.length() / (1024 * 1024)} MB)" else "Nenhum modelo instalado")
+                Text(if (hasModel) "Modelo baixado: ${modelFile.name} (${modelFile.length() / (1024 * 1024)} MB)" else "Nenhum modelo instalado")
                 Button(
                     enabled = !busy && modelUrl.isNotBlank(),
                     onClick = {
@@ -85,6 +85,7 @@ private fun ImageGeneratorScreen(filesDir: File) {
                         scope.launch {
                             try {
                                 downloader.download(modelUrl.trim(), modelFile) { progress = it }
+                                hasModel = true
                                 status = "Download concluído. O arquivo está disponível offline."
                             } catch (e: Exception) {
                                 status = "Erro no download: ${e.message}"
@@ -119,7 +120,7 @@ private fun ImageGeneratorScreen(filesDir: File) {
                     Text("GPU (Vulkan, com fallback para CPU)")
                 }
                 Button(
-                    enabled = !busy && prompt.isNotBlank() && hasModel.value,
+                    enabled = !busy && prompt.isNotBlank() && hasModel,
                     onClick = {
                         busy = true
                         status = "Gerando imagem…"
