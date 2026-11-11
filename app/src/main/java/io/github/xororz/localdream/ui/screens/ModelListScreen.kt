@@ -1620,6 +1620,32 @@ fun ModelListScreen(navController: NavController, modifier: Modifier = Modifier)
                                         }
                                     },
                                 )
+                                FilledTonalButton(
+                                    onClick = {
+                                        scope.launch {
+                                            val savedPath = runCatching {
+                                                LogCapture.exportCurrentLogs(context)
+                                            }.getOrNull()
+                                            snackbarHostState.showSnackbar(
+                                                if (savedPath != null) {
+                                                    msgLogSaved.format(savedPath)
+                                                } else {
+                                                    msgLogSaveFailed
+                                                },
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.FileDownload,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 8.dp),
+                                    )
+                                    Text(stringResource(R.string.export_logs))
+                                }
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
                                 )
