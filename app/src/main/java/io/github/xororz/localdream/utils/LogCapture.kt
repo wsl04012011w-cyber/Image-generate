@@ -1,15 +1,26 @@
 package io.github.xororz.localdream.utils
 
+import android.content.ContentValues
+import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 object LogCapture {
     private const val TAG = "LogCapture"
@@ -76,6 +87,50 @@ object LogCapture {
         }
         lastCapturedLogs.value = captured
         Log.i(TAG, "log capture stopped, ${captured.length} chars")
+    }
+
+    suspend fun exportCurrentLogs(context: Context): String = withContext(Dispatchers.IO) {
+        val pid = android.os.Process.myPid()
+        val process = Runtime.getRuntime().exec(
+            arrayOf("logcat", "-d", "--pid=$pid", "-v", "threadtime"),
+        )
+        val logs = process.inputStream.bufferedReader().use { it.readText() }
+        val exitCode = process.waitFor()
+        if (exitCode != 0 && logs.isBlank()) {
+            throw java.io.IOException("logcat exited with code $exitCode")
+        }
+
+        val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
+        val filename = "local_dream_log_$timestamp.log"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                put(
+                    MediaStore.Downloads.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + "/LocalDream",
+                )
+            }
+            val uri = context.contentResolver.insert(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                values,
+            ) ?: throw java.io.IOException("MediaStore insert failed")
+            context.contentResolver.openOutputStream(uri)?.use {
+                it.write(logs.toByteArray(Charsets.UTF_8))
+            } ?: throw java.io.IOException("openOutputStream failed")
+            "Downloads/LocalDream/$filename"
+        } else {
+            val dir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "LocalDream",
+            )
+            if (!dir.exists() && !dir.mkdirs()) {
+                throw java.io.IOException("Could not create Downloads/LocalDream")
+            }
+            val file = File(dir, filename)
+            FileOutputStream(file).use { it.write(logs.toByteArray(Charsets.UTF_8)) }
+            file.absolutePath
+        }
     }
 
     fun consume() {
