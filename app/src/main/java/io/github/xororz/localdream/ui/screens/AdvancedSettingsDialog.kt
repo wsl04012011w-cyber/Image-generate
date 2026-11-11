@@ -409,7 +409,7 @@ internal fun AdvancedSettingsDialog(
                             shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text("GPU")
+                            Text("GPU acceleration")
                         }
                     }
                 }
