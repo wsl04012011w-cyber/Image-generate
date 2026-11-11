@@ -1,0 +1,5 @@
+Imported from https://github.com/xororz/local-dream
+Upstream ref: master
+Upstream commit: 2f1f3ba186eeca2a52268540108b3ee6e2296d17
+Imported on: https://github.com/wsl04012011w-cyber/Image-generate/actions/runs/42888415882
+Local modifications: MNN Vulkan-first GPU backend and Android CI.

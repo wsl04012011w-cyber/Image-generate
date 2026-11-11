@@ -1,0 +1,124 @@
+name: Android GPU build
+
+on:
+  push:
+    branches:
+      - feat/local-dream-gpu
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-gpu-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  import-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout destination branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/local-dream-gpu
+          fetch-depth: 0
+
+      # Import the public upstream tree inside the runner. This preserves
+      # binary Git objects and submodule gitlinks that the GitHub Contents API
+      # cannot transfer. The workflow is saved/restored because the upstream
+      # repository does not currently define a workflow of its own.
+      - name: Import Local Dream snapshot once
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f .local-dream-imported ]]; then
+            mkdir -p "$RUNNER_TEMP/local-dream-workflow"
+            cp .github/workflows/android-gpu.yml "$RUNNER_TEMP/local-dream-workflow/android-gpu.yml"
+
+            git remote add upstream https://github.com/xororz/local-dream.git
+            git fetch --no-tags upstream master
+            upstream_sha="$(git rev-parse upstream/master)"
+
+            git read-tree --reset -u upstream/master
+            mkdir -p .github/workflows
+            cp "$RUNNER_TEMP/local-dream-workflow/android-gpu.yml" .github/workflows/android-gpu.yml
+
+            cat > .local-dream-imported <<EOF
+          Imported from https://github.com/xororz/local-dream
+          Upstream ref: master
+          Upstream commit: $upstream_sha
+          Imported on: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          Local modifications: MNN Vulkan-first GPU backend and Android CI.
+          EOF
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Import Local Dream upstream snapshot"
+            git push origin HEAD:refs/heads/feat/local-dream-gpu
+          else
+            echo "Upstream snapshot already imported; keeping branch changes."
+          fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK, NDK and CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.31.6"
+          # Android 17 preview SDK is published under android-37.0, while AGP
+          # resolves compileSdk 37 through the canonical android-37 directory.
+          if [[ -d "$ANDROID_HOME/platforms/android-37.0" ]]; then
+            ln -sfn android-37.0 "$ANDROID_HOME/platforms/android-37"
+          elif [[ ! -d "$ANDROID_HOME/platforms/android-37" ]]; then
+            echo "Android API 37 platform package was not installed." >&2
+            exit 1
+          fi
+          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/cmake/3.31.6/bin" >> "$GITHUB_PATH"
+
+      - name: Initialize native submodules
+        run: git submodule update --init --recursive
+
+      # This compiles MNN itself for Android with both mobile GPU backends.
+      # Runtime selection in the app tries Vulkan, then OpenCL, then CPU.
+      - name: Build MNN with Vulkan and OpenCL
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S app/src/main/cpp/3rdparty/MNN -B "$RUNNER_TEMP/mnn-android" -G Ninja             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake"             -DCMAKE_SYSTEM_NAME=Android             -DANDROID_ABI=arm64-v8a             -DANDROID_PLATFORM=android-28             -DANDROID_STL=c++_static             -DCMAKE_BUILD_TYPE=Release             -DCMAKE_POLICY_VERSION_MINIMUM=3.10             -DMNN_BUILD_SHARED_LIBS=OFF             -DMNN_SEP_BUILD=OFF             -DMNN_BUILD_TOOLS=OFF             -DMNN_BUILD_DEMO=OFF             -DMNN_BUILD_TEST=OFF             -DMNN_BUILD_BENCHMARK=OFF             -DMNN_BUILD_CONVERTER=OFF             -DMNN_BUILD_OPENCV=OFF             -DMNN_BUILD_FOR_ANDROID=ON             -DMNN_BUILD_FOR_ANDROID_COMMAND=ON             -DMNN_LOW_MEMORY=ON             -DMNN_SUPPORT_TRANSFORMER_FUSE=ON             -DMNN_OPENCL=ON             -DMNN_VULKAN=ON             -DMNN_USE_SYSTEM_LIB=OFF
+          cmake --build "$RUNNER_TEMP/mnn-android" --target MNN --parallel 2
+
+      - name: Report Android dependency versions
+        run: |
+          echo "compileSdk 37; using upstream Material3 1.5.0-alpha20 and Compose BOM 2025.10.01.";
+          grep -E 'compileSdk|material3 =' app/build.gradle.kts gradle/libs.versions.toml
+
+      - name: Run Android unit tests and assemble APKs
+        run: |
+          ./gradlew --no-daemon             :app:testBasicDebugUnitTest             :app:testFilterDebugUnitTest             :app:assembleBasicDebug             :app:assembleFilterDebug
+
+      - name: Upload APKs and native build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-dream-android-gpu
+          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/**/*.apk
+            ${{ runner.temp }}/mnn-android/CMakeCache.txt
