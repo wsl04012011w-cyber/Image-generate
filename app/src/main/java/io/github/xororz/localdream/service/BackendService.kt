@@ -304,7 +304,20 @@ class BackendService : Service() {
         if (startBackend(want)) {
             serving = want
             updateServing(want)
-            updateState(BackendState.Running)
+            val startedProcess = process
+            if (startedProcess?.isAlive == true) {
+                // Publish the serving model before monitoring stdout. A very
+                // fast native-process exit must be attributed to this model
+                // and must not be overwritten by a late "Running" update.
+                updateState(BackendState.Running)
+                startMonitorThread(startedProcess, want.modelId)
+            } else {
+                serving = null
+                updateServing(null)
+                updateState(
+                    BackendState.Error("Backend process exited during startup", want.modelId),
+                )
+            }
         } else {
             serving = null
             updateServing(null)
@@ -462,6 +475,12 @@ class BackendService : Service() {
 
             Log.i(TAG, "Runtime directory prepared: ${runtimeDir.absolutePath}")
             Log.i(TAG, "Runtime files: ${runtimeDir.list()?.joinToString()}")
+            // If a start command was queued while runtime assets were being
+            // prepared, reconcile it now instead of leaving the service idle.
+            desired?.let { queuedConfig ->
+                Log.i(TAG, "Runtime preparation complete; reconciling queued model ${queuedConfig.modelId}")
+                reconcile(forceRestart = false)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Prepare runtime dir failed", e)
             updateState(BackendState.Error("Prepare runtime dir failed: ${e.message}"))
@@ -663,8 +682,6 @@ class BackendService : Service() {
             val proc = processBuilder.start()
             process = proc
 
-            startMonitorThread(proc)
-
             return true
         } catch (e: Exception) {
             Log.e(TAG, "backend start failed", e)
@@ -673,7 +690,7 @@ class BackendService : Service() {
         }
     }
 
-    private fun startMonitorThread(proc: Process) {
+    private fun startMonitorThread(proc: Process, modelId: String) {
         Thread {
             val exitCode = try {
                 proc.inputStream.bufferedReader().use { reader ->
@@ -686,7 +703,7 @@ class BackendService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "monitor error", e)
                 if (isLiveCrash(proc)) {
-                    updateState(BackendState.Error("monitor error: ${e.message}", servingModelId.value))
+                    updateState(BackendState.Error("monitor error: ${e.message}", modelId))
                 }
                 return@Thread
             }
@@ -698,7 +715,7 @@ class BackendService : Service() {
                 updateState(
                     BackendState.Error(
                         "Backend process exited with code: $exitCode",
-                        servingModelId.value,
+                        modelId,
                     ),
                 )
             } else {
