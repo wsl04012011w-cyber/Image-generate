@@ -8,6 +8,7 @@
     <string name="illustriousv16_description">WAI Illustrious SDXL v16</string>
     <string name="dmd2_description">Merged with DMD2 LoRA</string>
     <string name="capture_logs">Capture logs</string>
+    <string name="export_logs">Export logs to Downloads</string>
     <string name="capture_logs_hint">Collect app logs while a model is running, then show them after you exit</string>
     <string name="listen_on_all_addresses">Allow LAN access</string>
     <string name="listen_on_all_addresses_hint">Let other devices on the same network reach the backend (port 8081). Off = local only.</string>
