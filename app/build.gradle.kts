@@ -74,8 +74,9 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // Debug APKs use Android's generated debug keystore. The release
+        // keystore is intentionally not required in CI.
         debug {
-            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
